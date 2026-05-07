@@ -1,0 +1,7 @@
+python-telegram-bot[job-queue]==21.6
+solders==0.21.0
+httpx==0.27.0
+aiohttp==3.9.5
+pandas==2.2.2
+pandas-ta==0.3.14b
+python-dotenv==1.0.1
