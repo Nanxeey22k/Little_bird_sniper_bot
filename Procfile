@@ -1,1 +1,1 @@
-worker: python sniper_bot.py
+worker: python main.py
