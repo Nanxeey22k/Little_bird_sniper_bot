@@ -1,9 +1,10 @@
 aiohttp
 httpx
+python-telegram-bot
 pandas
 pandas-ta-classic
 numpy
 python-dotenv
+websockets
 solders
 solana
-websockets
