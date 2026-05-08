@@ -4,4 +4,4 @@ pandas-ta==0.3.14b
 # With this:
 pandas-ta
 # or for latest:
-git+https://github.com/twopirllc/pandas-ta.git
+pandas-ta-classic
