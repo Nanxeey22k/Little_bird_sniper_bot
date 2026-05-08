@@ -1,5 +1,9 @@
 aiohttp
+httpx
 pandas
 pandas-ta-classic
 numpy
 python-dotenv
+solders
+solana
+websockets
