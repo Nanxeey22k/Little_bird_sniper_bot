@@ -1,8 +1,8 @@
-# ================== BUILD STAGE ==================
-FROM python:3.11-slim AS builder
+FROM python:3.11-slim
 
 WORKDIR /app
 
+# System dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libssl-dev \
@@ -10,23 +10,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
     pkg-config \
-    && rm -rf /var/lib/apt/lists/* \
-    && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
-    && . "$HOME/.cargo/env"
+    && rm -rf /var/lib/apt/lists/*
 
+# Install Rust (needed for some packages like solders)
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-
-# ================== FINAL STAGE ==================
-FROM python:3.11-slim
-
-WORKDIR /app
-
-# Copy only the installed packages from builder
-COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
 
 COPY . .
 
