@@ -1,1 +1,5 @@
+aiohttp
+pandas
 pandas-ta-classic
+numpy
+python-dotenv
