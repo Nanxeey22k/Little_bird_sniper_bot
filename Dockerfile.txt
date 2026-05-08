@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Rust (needed for some packages like solders)
+# Install Rust (critical for solders)
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
 
@@ -20,5 +20,9 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
+
+# Optional: Run as non-root
+RUN useradd -m appuser && chown -R appuser /app
+USER appuser
 
 CMD ["python", "main.py"]
