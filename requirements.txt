@@ -1,5 +1,5 @@
 # Replace this line:
-pandas-ta==0.3.14b
+pandas-ta-classic
 
 # With this:
 pandas-ta
