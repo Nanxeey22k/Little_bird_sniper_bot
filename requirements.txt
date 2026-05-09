@@ -1,27 +1,11 @@
-aiohttp
-httpx
-python-telegram-bot
-pandas
+python-telegram-bot[job-queue]==21.6
+solders==0.21.0
+httpx==0.27.0
+aiohttp==3.9.5
+pandas==2.2.2
+python-dotenv==1.0.1
 pandas-ta-classic
 numpy
 python-dotenv
 websockets
-solders
 solana
-
-WORKDIR /app
-
-# Install system dependencies needed for solders/cryptography
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    libssl-dev \
-    libffi-dev \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY . .
-
-CMD ["python", "main.py"]
