@@ -1,4 +1,4 @@
-# ðŸ¤– Elite bird Sniper Bot v3.0
+# ðŸ¤– Elite solana Sniper Bot v3.0
 
 A professional-grade Telegram-controlled Solana token sniper with **ML scoring**, **real-time DEX scanning**, **anti-rug detection**, and a **full inline control panel** â€” all from inside Telegram.
 
