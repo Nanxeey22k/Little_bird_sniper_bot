@@ -787,93 +787,135 @@ def _scan_alert_keyboard(addr: str) -> InlineKeyboardMarkup:
 # ════════════════════════════════════════════════════
 
 async def scanner_job(context: ContextTypes.DEFAULT_TYPE):
-    if not cfg["auto_scan"]:
+    if not cfg.get("auto_scan", False):
         return
+    
     logger.info("🔍 Auto-scanner running...")
+
     try:
         pairs = await get_dexscreener_new_pairs(limit=40)
+        logger.info(f"Received {len(pairs)} pairs from DexScreener")
+
         found: List[TokenScore] = []
 
         for pair in pairs:
-            base = pair.get("baseToken", {})
-            addr = base.get("address", "")
-            if not addr or addr == WSOL:
-                continue
-            if addr in blacklist:
-                continue
-            if addr in positions:
+            try:
+                base = pair.get("baseToken", {})
+                addr = base.get("address", "")
+                symbol = base.get("symbol", "UNKNOWN")
+
+                if not addr or addr == WSOL:
+                    logger.debug(f"Skipped {symbol}: No address or WSOL")
+                    continue
+                if addr in blacklist:
+                    logger.debug(f"Skipped {symbol}: Blacklisted")
+                    continue
+                if addr in positions:
+                    logger.debug(f"Skipped {symbol}: Already in positions")
+                    continue
+
+                # === Liquidity & Volume ===
+                liq = float(pair.get("liquidity", {}).get("usd", 0) or 0)
+                vol1h = float(pair.get("volume", {}).get("h1", 0) or 0)
+                
+                logger.info(f"Candidate: {symbol} ({addr[:8]}...) | Liq: ${liq:,.0f} | Vol1h: ${vol1h:,.0f}")
+
+                if liq < cfg.get("min_liquidity_usd", 0) or vol1h < cfg.get("min_volume_1h_usd", 0):
+                    logger.debug(f"  Skipped {symbol}: Low liquidity/volume")
+                    continue
+
+                # === Age Filter ===
+                created = pair.get("pairCreatedAt", 0)
+                age_min = (time.time() * 1000 - created) / 60000 if created else 9999
+                min_age = cfg.get("min_age_minutes", 0)
+                max_age = cfg.get("max_age_minutes", 9999)
+
+                logger.debug(f"  Age: {age_min:.1f} min (limits: {min_age}-{max_age})")
+                if not (min_age <= age_min <= max_age):
+                    logger.debug(f"  Skipped {symbol}: Age out of range")
+                    continue
+
+                # === Holder & Security Checks ===
+                holders, top10 = await get_token_holders(addr)
+                has_freeze, has_mint = await check_freeze_mint_authority(addr)
+                
+                if top10 > cfg.get("max_top10_pct", 100):
+                    logger.debug(f"  Skipped {symbol}: Top10 concentration too high ({top10}%)")
+                    continue
+
+                # === OHLCV & Scoring ===
+                df = await get_ohlcv(addr, 60)
+
+                ts = score_token(pair, holders, top10, has_freeze, has_mint, df)
+                
+                # === DEBUG MODE: Force high score to test the rest of the pipeline ===
+                # ts.score = 95   # ← Uncomment this line to force tokens through
+
+                logger.info(f"  → Score for {symbol}: {ts.score}/100  (min required: {cfg.get('min_score', 0)})")
+
+                if ts.score >= cfg.get("min_score", 0):
+                    found.append(ts)
+                    logger.info(f"✅ Token PASSED filters: {symbol} (Score: {ts.score})")
+
+            except Exception as e:
+                logger.warning(f"Error processing pair {symbol} ({addr}): {e}")
                 continue
 
-            liq   = float(pair.get("liquidity", {}).get("usd", 0) or 0)
-            vol1h = float(pair.get("volume", {}).get("h1", 0) or 0)
-            if liq < cfg["min_liquidity_usd"] or vol1h < cfg["min_volume_1h_usd"]:
-                continue
-
-            created = pair.get("pairCreatedAt", 0)
-            age_min = (time.time() * 1000 - created) / 60000 if created else 9999
-            if not (cfg["min_age_minutes"] <= age_min <= cfg["max_age_minutes"]):
-                continue
-
-            holders, top10 = await get_token_holders(addr)
-            has_freeze, has_mint = await check_freeze_mint_authority(addr)
-            df = await get_ohlcv(addr, 60)
-
-            if top10 > cfg["max_top10_pct"]:
-                continue
-
-            ts = score_token(pair, holders, top10, has_freeze, has_mint, df)
-            if ts.score >= cfg["min_score"]:
-                found.append(ts)
-
+        # ====================== After Processing ======================
         found.sort(key=lambda x: x.score, reverse=True)
         scan_alerts.clear()
         scan_alerts.extend(found[:10])
 
-        if found:
-            best = found[0]
-            msg  = _format_scan_alert(best)
-            kb   = _scan_alert_keyboard(best.address)
+        logger.info(f"Scan complete. Tokens that passed: {len(found)}")
 
-            # Auto-buy if enabled
-            if cfg["auto_buy"]:
-                ok, reason = risk_engine.can_trade()
-                if ok:
-                    bal  = await get_wallet_balance()
-                    size = risk_engine.calc_position_sol(bal)
-                    if bal >= size + 0.01:
-                        success, tx_sig, link = await execute_swap(
-                            WSOL, best.address, int(size * 1_000_000_000), cfg["slippage_bps"]
-                        )
-                        if success:
-                            ep = await get_token_price(best.address)
-                            pos = Position(
-                                token=best.address, symbol=best.symbol,
-                                entry_price=ep, entry_sol=size,
-                                amount_tokens=int(size * 1e9 * 0.95),
-                                peak_price=ep, tx_sig=tx_sig or ""
-                            )
-                            positions[best.address] = pos
-                            save_position(pos)
-                            risk_engine.register_trade(0)
-                            msg += f"\n\n🤖 *AUTO-BOUGHT* {size:.4f} SOL → [TX]({link})"
+        if not found:
+            logger.info("🔍 Scan complete. No tokens passed filters.")
+            return
 
-            # Telegram notify
-            for uid in ALLOWED_USER_IDS:
-                try:
-                    await context.bot.send_message(
-                        uid, msg, parse_mode=ParseMode.MARKDOWN,
-                        reply_markup=kb, disable_web_page_preview=True
+        # ====================== Send Alerts & Auto-Buy ======================
+        best = found[0]
+        msg = _format_scan_alert(best)
+        kb = _scan_alert_keyboard(best.address)
+
+        # Auto-buy if enabled
+        if cfg.get("auto_buy", False):
+            ok, reason = risk_engine.can_trade()
+            if ok:
+                bal = await get_wallet_balance()
+                size = risk_engine.calc_position_sol(bal)
+                if bal >= size + 0.01:
+                    success, tx_sig, link = await execute_swap(
+                        WSOL, best.address, int(size * 1_000_000_000), cfg.get("slippage_bps", 500)
                     )
-                except Exception as e:
-                    logger.warning(f"Notify {uid}: {e}")
+                    if success:
+                        ep = await get_token_price(best.address)
+                        pos = Position(
+                            token=best.address, symbol=best.symbol,
+                            entry_price=ep, entry_sol=size,
+                            amount_tokens=int(size * 1e9 * 0.95),
+                            peak_price=ep, tx_sig=tx_sig or ""
+                        )
+                        positions[best.address] = pos
+                        save_position(pos)
+                        risk_engine.register_trade(0)
+                        msg += f"\n\n🤖 *AUTO-BOUGHT* {size:.4f} SOL → [TX]({link})"
 
-            # Discord mirror
-            plain = msg.replace("*", "**").replace("`", "`")
-            await discord_notify(f"🎯 **SNIPER ALERT** — {best.symbol} Score: {best.score}/100\n{best.dex_url}")
+        # Telegram notifications
+        for uid in ALLOWED_USER_IDS:
+            try:
+                await context.bot.send_message(
+                    uid, msg, parse_mode=ParseMode.MARKDOWN,
+                    reply_markup=kb, disable_web_page_preview=True
+                )
+            except Exception as e:
+                logger.warning(f"Notify user {uid}: {e}")
+
+        # Discord mirror
+        plain = msg.replace("*", "**").replace("`", "`")
+        await discord_notify(f"🎯 **SNIPER ALERT** — {best.symbol} Score: {best.score}/100\n{best.dex_url}")
 
     except Exception as e:
-        logger.error(f"Scanner job error: {e}")
-
+        logger.error(f"Scanner job error: {e}", exc_info=True)
 
 # ════════════════════════════════════════════════════
 #  POSITION MONITOR (background job)
