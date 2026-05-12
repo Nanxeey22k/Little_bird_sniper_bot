@@ -817,14 +817,14 @@ def _scan_alert_keyboard(addr: str) -> InlineKeyboardMarkup:
     ])
 
 
-# ══════════════════════════════════
+# ================== CONSTANTS & GLOBALS ==================
+WSOL = "So11111111111111111111111111111111111111112"
+
+blacklist = set([WSOL, "SOL"])
+
+# ═════════════════════════════════════════
 #  SCANNER (background job)
 # ═════════════════════════════════════════
-
-import time
-from typing import List
-
-logger = logging.getLogger(__name__)
 
 async def scanner_job(context: ContextTypes.DEFAULT_TYPE):
     if not cfg.get("auto_scan", False):
@@ -833,7 +833,6 @@ async def scanner_job(context: ContextTypes.DEFAULT_TYPE):
     logger.info("🔍 Auto-scanner running...")
 
     try:
-        # Fetch new pairs
         pairs = await get_dexscreener_new_pairs(limit=80)
         logger.info(f"Received {len(pairs)} pairs from DexScreener")
 
@@ -846,13 +845,10 @@ async def scanner_job(context: ContextTypes.DEFAULT_TYPE):
                 symbol = base.get("symbol", "UNKNOWN")
 
                 if not addr or addr == WSOL:
-                    logger.debug(f"Skipped {symbol}: invalid address or WSOL")
                     continue
                 if addr in blacklist:
-                    logger.debug(f"Skipped {symbol}: blacklisted")
                     continue
                 if addr in positions:
-                    logger.debug(f"Skipped {symbol}: already in positions")
                     continue
 
                 liq = float(pair.get("liquidity", {}).get("usd", 0) or 0)
@@ -884,7 +880,6 @@ async def scanner_job(context: ContextTypes.DEFAULT_TYPE):
                 logger.warning(f"Error processing {symbol}: {inner_e}")
                 continue
 
-        # After scanning all pairs
         found.sort(key=lambda x: x.score, reverse=True)
         scan_alerts.clear()
         scan_alerts.extend(found[:8])
@@ -896,7 +891,6 @@ async def scanner_job(context: ContextTypes.DEFAULT_TYPE):
             msg = _format_scan_alert(best)
             kb = _scan_alert_keyboard(best.address)
 
-            # Send alerts
             for uid in ALLOWED_USER_IDS:
                 try:
                     await context.bot.send_message(
