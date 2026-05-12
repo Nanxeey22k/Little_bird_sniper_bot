@@ -818,11 +818,6 @@ def _scan_alert_keyboard(addr: str) -> InlineKeyboardMarkup:
     ])
 
 
-# ================== CONSTANTS & GLOBALS ==================
-WSOL = "So11111111111111111111111111111111111111112"
-
-blacklist = set([WSOL, "SOL"])
-
 # ═════════════════════════════════════════
 #  SCANNER (background job)
 # ═════════════════════════════════════════
