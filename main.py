@@ -817,69 +817,7 @@ def _scan_alert_keyboard(addr: str) -> InlineKeyboardMarkup:
     ])
 
 
-# ════════════════════════════════════════════════════
-#  SCANNER (background job)
-# ════════════════════════════════════════════════════
-
-import time
-import logging
-from typing import List
-
-logger = logging.getLogger(__name__)
-
-async def scanner_job(context: ContextTypes.DEFAULT_TYPE):
-    if not cfg.get("auto_scan", False):
-        return
-
-    logger.info("🔍 Auto-scanner running...")
-
-    try:
-        # Fetch new pairs - this is the critical part
-      pairs = await get_dexscreener_new_pairs(limit=80)
-logger.info(f"Received {len(pairs)} pairs from DexScreener")
-
-        found: List[TokenScore] = []
-
-        for pair in pairs:
-            try:
-                base = pair.get("baseToken", {})
-                addr = base.get("address", "").strip()
-                symbol = base.get("symbol", "UNKNOWN")
-
-                if not addr or addr == WSOL:
-                    logger.debug(f"Skipped {symbol}: invalid address or WSOL")
-                    continue
-                if addr in blacklist:
-                    logger.debug(f"Skipped {symbol}: blacklisted")
-                    continue
-                if addr in positions:
-async def scanner_job(context: ContextTypes.DEFAULT_TYPE):
-    if not cfg.get("auto_scan", False):
-        return
-
-    logger.info("🔍 Auto-scanner running...")
-
-    try:
-        pairs = await get_dexscreener_new_pairs(limit=80)
-        logger.info(f"Received {len(pairs)} pairs from DexScreener")
-
-        found: List[TokenScore] = []
-
-        for pair in pairs:
-            try:
-                base = pair.get("baseToken", {})
-                addr = base.get("address", "").strip()
-                symbol = base.get("symbol", "UNKNOWN")
-
-                if not addr or addr == WSOL:
-                    continue
-                if addr in blacklist:
-async def scanner_job(context: ContextTypes.DEFAULT_TYPE):
-    if not cfg.get("auto_scan", False):
-        return
-
-    logger.info("🔍 Auto-scanner running...")
-# ═════════════════════════════════════════
+# ══════════════════════════════════
 #  SCANNER (background job)
 # ═════════════════════════════════════════
 
