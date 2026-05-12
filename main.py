@@ -390,7 +390,7 @@ def auth_required(func):
             await update.effective_message.reply_text("⛔ Unauthorized.")
             logger.warning(f"Unauthorized: {update.effective_user}")
             return
-        if cfg["bot_paused"] and func.__name__ not in ("resume_cmd", "status_cmd", "help_cmd", "stop_cmd"):
+        if cfg.get("bot_paused", False) and func.__name__ not in ("resume_cmd", "status_cmd", "help_cmd", "stop_cmd"):
             await update.effective_message.reply_text("⏸ Bot is paused. Use /resume to continue.")
             return
         return await func(update, context)
