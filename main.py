@@ -853,82 +853,83 @@ logger.info(f"Received {len(pairs)} pairs from DexScreener")
                     logger.debug(f"Skipped {symbol}: blacklisted")
                     continue
                 if addr in positions:
-                    logger.debug(f"Skipped {symbol}: already positioned")
+async def scanner_job(context: ContextTypes.DEFAULT_TYPE):
+    if not cfg.get("auto_scan", False):
+        return
+
+    logger.info("🔍 Auto-scanner running...")
+
+    try:
+        pairs = await get_dexscreener_new_pairs(limit=80)
+        logger.info(f"Received {len(pairs)} pairs from DexScreener")
+
+        found: List[TokenScore] = []
+
+        for pair in pairs:
+            try:
+                base = pair.get("baseToken", {})
+                addr = base.get("address", "").strip()
+                symbol = base.get("symbol", "UNKNOWN")
+
+                if not addr or addr == WSOL:
+                    continue
+                if addr in blacklist:
+                    continue
+                if addr in positions:
                     continue
 
                 liq = float(pair.get("liquidity", {}).get("usd", 0) or 0)
                 vol1h = float(pair.get("volume", {}).get("h1", 0) or 0)
 
-                logger.info(f"Candidate → {symbol} ({addr[:8]}...) | Liq: ${liq:,.0f} | Vol1h: ${vol1h:,.0f}")
+                logger.info(f"Candidate → {symbol} | Liq: ${liq:,.0f} | Vol: ${vol1h:,.0f}")
 
-                # Relaxed filters for debugging
-                if liq < cfg.get("min_liquidity_usd", 0) or vol1h < cfg.get("min_volume_1h_usd", 0):
-                    logger.debug(f"  Skipped {symbol}: liquidity/volume too low")
-                    continue
-
-                # Age
+                # Age check
                 created = pair.get("pairCreatedAt", 0)
-                age_min = (time.time() * 1000 - created) / 60000 if created > 0 else 9999
-                if not (cfg.get("min_age_minutes", 0) <= age_min <= cfg.get("max_age_minutes", 9999)):
-                    logger.debug(f"  Skipped {symbol}: Age {age_min:.1f} min out of range")
+                age_min = (time.time() * 1000 - created) / 60000 if created else 9999
+                if age_min > cfg.get("max_age_minutes", 60):
                     continue
 
                 holders, top10 = await get_token_holders(addr)
                 has_freeze, has_mint = await check_freeze_mint_authority(addr)
-                if top10 > cfg.get("max_top10_pct", 100):
-                    logger.debug(f"  Skipped {symbol}: Top holders too concentrated ({top10}%)")
+
+                if top10 > cfg.get("max_top10_pct", 30):
                     continue
 
                 df = await get_ohlcv(addr, 60)
-
                 ts = score_token(pair, holders, top10, has_freeze, has_mint, df)
 
-                # === FORCE MODE FOR TESTING (uncomment to bypass score) ===
-                # ts.score = 90
-
-                logger.info(f"  Score for {symbol}: {ts.score}/100 (min: {cfg.get('min_score', 0)})")
-
-                if ts.score >= cfg.get("min_score", 0):
+                if ts.score >= cfg.get("min_score", 60):
                     found.append(ts)
-                    logger.info(f"✅ PASSED FILTERS: {symbol} (Score: {ts.score})")
+                    logger.info(f"✅ PASSED: {symbol} (Score: {ts.score})")
 
-            except Exception as pair_err:
-                logger.warning(f"Error processing {symbol} ({addr}): {pair_err}")
+            except Exception as inner_e:
+                logger.warning(f"Error processing token {symbol}: {inner_e}")
                 continue
 
+        # After loop
         found.sort(key=lambda x: x.score, reverse=True)
         scan_alerts.clear()
-        scan_alerts.extend(found[:10])
+        scan_alerts.extend(found[:8])
 
-        logger.info(f"Scan complete. Tokens passed: {len(found)}")
+        logger.info(f"Scan complete. Found {len(found)} good tokens.")
 
-        if not found:
-            logger.info("🔍 Scan complete. No tokens passed filters.")
-            return
+        if found:
+            best = found[0]
+            msg = _format_scan_alert(best)
+            kb = _scan_alert_keyboard(best.address)
 
-        # === Alerting & Auto-buy (unchanged but safer) ===
-        best = found[0]
-        msg = _format_scan_alert(best)
-        kb = _scan_alert_keyboard(best.address)
+            # Send alerts to users
+            for uid in ALLOWED_USER_IDS:
+                try:
+                    await context.bot.send_message(uid, msg, parse_mode=ParseMode.MARKDOWN, 
+                                                 reply_markup=kb, disable_web_page_preview=True)
+                except Exception as e:
+                    logger.warning(f"Failed to notify {uid}: {e}")
 
-        if cfg.get("auto_buy", False):
-            # ... your existing auto-buy logic ...
-            pass
-
-        # Send notifications
-        for uid in ALLOWED_USER_IDS:
-            try:
-                await context.bot.send_message(
-                    uid, msg, parse_mode=ParseMode.MARKDOWN,
-                    reply_markup=kb, disable_web_page_preview=True
-                )
-            except Exception as e:
-                logger.warning(f"Notify {uid} failed: {e}")
-
-        await discord_notify(f"🎯 **SNIPER ALERT** — {best.symbol} Score: {best.score}/100\n{best.dex_url}")
-
-    except Exception as e:
+    except Exception as e:                                      # ← This was probably missing
         logger.error(f"Scanner job crashed: {e}", exc_info=True)
+
+
 # ════════════════════════════════════════════════════
 #  POSITION MONITOR (background job)
 # ════════════════════════════════════════════════════
