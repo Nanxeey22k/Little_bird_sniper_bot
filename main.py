@@ -453,19 +453,29 @@ async def get_token_price(token: str) -> float:
         return 0.0
 
 
-async def get_dexscreener_new_pairs(limit: int = 40) -> List[dict]:
+async def get_dexscreener_new_pairs(limit: int = 50):
+    """Improved fetcher - tries multiple methods"""
     try:
+        # Method 1: Search for SOL pairs (broad but works)
         async with aiohttp.ClientSession() as session:
             async with session.get(
-                "https://api.dexscreener.com/latest/dex/search?q=SOL&chainId=solana",
-                timeout=aiohttp.ClientTimeout(total=15)
+                "https://api.dexscreener.com/latest/dex/search?q=SOL",
+                timeout=10
             ) as resp:
-                data = await resp.json()
-                pairs = [p for p in data.get("pairs", []) if p.get("chainId") == "solana"]
-                pairs.sort(key=lambda x: x.get("pairCreatedAt", 0), reverse=True)
-                return pairs[:limit]
+                if resp.status == 200:
+                    data = await resp.json()
+                    pairs = data.get("pairs", [])[:limit]
+                    # Filter to Solana + recent-ish
+                    sol_pairs = [p for p in pairs if p.get("chainId") == "solana"]
+                    logger.info(f"Search returned {len(sol_pairs)} Solana pairs")
+                    return sol_pairs
+
+        # Fallback: You can add scraping logic for https://dexscreener.com/new-pairs/solana if needed
+        logger.warning("Falling back - no pairs from API")
+        return []
+
     except Exception as e:
-        logger.error(f"DexScreener error: {e}")
+        logger.error(f"Failed to fetch new pairs: {e}")
         return []
 
 
