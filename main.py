@@ -454,28 +454,34 @@ async def get_token_price(token: str) -> float:
 
 
 async def get_dexscreener_new_pairs(limit: int = 50):
-    """Improved fetcher - tries multiple methods"""
+    """Better new pairs fetcher"""
     try:
-        # Method 1: Search for SOL pairs (broad but works)
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                "https://api.dexscreener.com/latest/dex/search?q=SOL",
-                timeout=10
-            ) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    pairs = data.get("pairs", [])[:limit]
-                    # Filter to Solana + recent-ish
-                    sol_pairs = [p for p in pairs if p.get("chainId") == "solana"]
-                    logger.info(f"Search returned {len(sol_pairs)} Solana pairs")
-                    return sol_pairs
-
-        # Fallback: You can add scraping logic for https://dexscreener.com/new-pairs/solana if needed
-        logger.warning("Falling back - no pairs from API")
+        # Try multiple approaches
+        urls = [
+            "https://api.dexscreener.com/latest/dex/search?q=SOL",  # Broad search
+            "https://api.dexscreener.com/latest/dex/pairs/solana",   # Try direct
+        ]
+        
+        for url in urls:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=12) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        pairs = data.get("pairs", [])[:limit]
+                        # Filter only Solana + recent-ish
+                        sol_pairs = [
+                            p for p in pairs 
+                            if p.get("chainId") == "solana" 
+                            and p.get("baseToken", {}).get("address") != WSOL
+                        ]
+                        logger.info(f"✅ Fetched {len(sol_pairs)} Solana pairs")
+                        return sol_pairs
+                        
+        logger.warning("All API attempts failed")
         return []
-
+        
     except Exception as e:
-        logger.error(f"Failed to fetch new pairs: {e}")
+        logger.error(f"New pairs fetch failed: {e}")
         return []
 
 
