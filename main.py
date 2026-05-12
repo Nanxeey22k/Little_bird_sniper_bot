@@ -834,8 +834,8 @@ async def scanner_job(context: ContextTypes.DEFAULT_TYPE):
 
     try:
         # Fetch new pairs - this is the critical part
-        pairs = await get_dexscreener_new_pairs(limit=50)
-        logger.info(f"Received {len(pairs)} pairs from DexScreener")
+      pairs = await get_dexscreener_new_pairs(limit=80)
+logger.info(f"Received {len(pairs)} pairs from DexScreener")
 
         found: List[TokenScore] = []
 
