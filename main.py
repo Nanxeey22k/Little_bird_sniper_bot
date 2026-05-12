@@ -69,6 +69,14 @@ from telegram.constants import ParseMode
 
 load_dotenv()
 
+# Blacklist known bad tokens
+blacklist = set([
+    WSOL, 
+    "So11111111111111111111111111111111111111112",  # WSOL
+    "SOL"  # in case it appears
+    # Add more addresses as you see junk tokens
+])
+
 # ════════════════════════════════════════════════════
 #  ENVIRONMENT & CONFIGURATION
 # ════════════════════════════════════════════════════
@@ -85,27 +93,26 @@ DB_PATH              = os.getenv("DB_PATH", "sniper_bot.db")
 
 # Default config — overridden by DB on startup
 DEFAULT_CFG: Dict = {
-    "buy_amount_sol":        float(os.getenv("BUY_AMOUNT_SOL", 0.05)),
-    "slippage_bps":          int(os.getenv("SLIPPAGE_BPS", 500)),
-    "max_position_sol":      float(os.getenv("MAX_POSITION_SOL", 0.5)),
-    "min_liquidity_usd":     float(os.getenv("MIN_LIQUIDITY", 15000)),
-    "take_profit_pct":       float(os.getenv("TAKE_PROFIT_PCT", 200)),
-    "stop_loss_pct":         float(os.getenv("STOP_LOSS_PCT", 50)),
-    "trailing_stop_pct":     float(os.getenv("TRAILING_STOP_PCT", 0)),
+DEFAULT_CFG = {
+    "buy_amount_sol": float(os.getenv("BUY_AMOUNT_SOL", 0.05)),
+    "slippage_bps": int(os.getenv("SLIPPAGE_BPS", 800)),
+    "max_position_sol": float(os.getenv("MAX_POSITION_SOL", 0.5)),
+    "min_liquidity_usd": float(os.getenv("MIN_LIQUIDITY", 8000)),
+    "take_profit_pct": float(os.getenv("TAKE_PROFIT_PCT", 200)),
+    "stop_loss_pct": float(os.getenv("STOP_LOSS_PCT", 50)),
+    "trailing_stop_pct": float(os.getenv("TRAILING_STOP_PCT", 0)),
     "priority_fee_lamports": int(os.getenv("PRIORITY_FEE_LAMPORTS", 100_000)),
-    "max_trades_day":        int(os.getenv("MAX_TRADES_DAY", 8)),
-    "risk_per_trade_pct":    float(os.getenv("RISK_PER_TRADE_PCT", 2.0)),
-    "min_score":             float(os.getenv("MIN_SCORE", 65.0)),
-    "auto_scan":             False,
-    "auto_buy":              False,
-    "scan_interval_sec":     120,
-    "min_age_minutes":       5,
-    "max_age_minutes":       60,
-    "min_volume_1h_usd":     5000,
-    "min_holders":           50,
-    "max_top10_pct":         60.0,
-    "bot_paused":            False,
-    "discord_alerts":        True,
+    "max_trades_day": int(os.getenv("MAX_TRADES_DAY", 8)),
+    "risk_per_trade_pct": float(os.getenv("RISK_PER_TRADE_PCT", 2.0)),
+    "min_score": float(os.getenv("MIN_SCORE", 62)),
+    "auto_scan": True,                    # ← MUST BE True
+    "auto_buy": False,                    # ← Keep False for now
+    "scan_interval_sec": 60,
+    "min_age_minutes": 0,
+    "max_age_minutes": 45,                # Focus on fresh tokens
+    "min_volume_1h_usd": 4000,
+    "min_holders": 25,
+    "max_top10_pct": 25,                  # Very important
 }
 
 cfg: Dict = dict(DEFAULT_CFG)
