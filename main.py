@@ -96,17 +96,19 @@ DEFAULT_CFG: Dict = {
     "priority_fee_lamports": int(os.getenv("PRIORITY_FEE_LAMPORTS", 100_000)),
     "max_trades_day": int(os.getenv("MAX_TRADES_DAY", 8)),
     "risk_per_trade_pct": float(os.getenv("RISK_PER_TRADE_PCT", 2.0)),
-    "min_score": float(os.getenv("MIN_SCORE", 62)),
+    "min_score": float(os.getenv("MIN_SCORE", 65)),
     
-    # Scanner settings
+    # === SCANNER FILTERS (TUNED) ===
     "auto_scan": True,
-    "auto_buy": False,
-    "scan_interval_sec": 60,
+    "auto_buy": False,           # Keep False until filters are good
+    "scan_interval_sec": 45,
     "min_age_minutes": 0,
-    "max_age_minutes": 45,
-    "min_volume_1h_usd": 4000,
-    "min_holders": 25,
-    "max_top10_pct": 25,
+    "max_age_minutes": 45,       # Only tokens < 45 minutes old
+    "min_volume_1h_usd": 3500,
+    "min_holders": 30,
+    "max_top10_pct": 25,         # Very important - no heavy whales
+    "bot_paused": False,
+    "discord_alerts": True,
 }
 
 cfg: Dict = dict(DEFAULT_CFG)
