@@ -69,12 +69,13 @@ from telegram.constants import ParseMode
 
 load_dotenv()
 
+WSOL = "So11111111111111111111111111111111111111112"
+
 # Blacklist known bad tokens
 blacklist = set([
     WSOL, 
-    "So11111111111111111111111111111111111111112",  # WSOL
-    "SOL"  # in case it appears
-    # Add more addresses as you see junk tokens
+    "So11111111111111111111111111111111111111112",
+    "SOL"
 ])
 
 # ════════════════════════════════════════════════════
