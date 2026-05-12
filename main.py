@@ -467,11 +467,11 @@ async def get_token_price(token: str) -> float:
 
 
 async def get_dexscreener_new_pairs(limit: int = 80):
-    """Improved fetcher - focuses on newer Solana tokens"""
+    """Fixed DexScreener fetcher"""
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(
-                "https://api.dexscreener.com/latest/dex/search?q=SOL",
+                "https://api.dexscreener.com/latest/dex/search?q=SOL", 
                 timeout=15
             ) as resp:
                 
@@ -480,32 +480,20 @@ async def get_dexscreener_new_pairs(limit: int = 80):
                     return []
                 
                 data = await resp.json()
-                all_pairs = data.get("pairs", [])[:limit]
+                pairs = data.get("pairs", [])[:limit]
                 
                 fresh_pairs = []
-                for p in all_pairs:
-                    if p.get("chainId") != "solana":
-                        continue
-                        
-                    base = p.get("baseToken", {})
-                    addr = base.get("address", "")
-                    if not addr or addr == WSOL:
-                        continue
-                    
-                    # Age filter at source level
-                    created = p.get("pairCreatedAt", 0)
-                    age_min = (time.time() * 1000 - created) / 60000 if created else 9999
-                    
-                    if age_min > 90:        # Ignore very old tokens here
-                        continue
-                        
-                    fresh_pairs.append(p)
+                for p in pairs:
+                    if p.get("chainId") == "solana":
+                        base_addr = p.get("baseToken", {}).get("address", "")
+                        if base_addr and base_addr != WSOL:
+                            fresh_pairs.append(p)
                 
-                logger.info(f"✅ Fetched {len(fresh_pairs)} fresh Solana pairs (age < 90min)")
+                logger.info(f"✅ Fetched {len(fresh_pairs)} Solana pairs from DexScreener")
                 return fresh_pairs
                 
     except Exception as e:
-        logger.error(f"get_dexscreener_new_pairs error: {e}", exc_info=True)
+        logger.error(f"get_dexscreener_new_pairs failed: {e}")
         return []
 
 
