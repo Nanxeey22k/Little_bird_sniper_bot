@@ -115,6 +115,10 @@ DEFAULT_CFG: Dict = {
     "min_volume_1h_usd": 4000,
     "min_holders": 25,
     "max_top10_pct": 25,
+    
+    # Added to fix the error
+    "bot_paused": False,
+    "discord_alerts": True,
 }
 
 cfg: Dict = dict(DEFAULT_CFG)
