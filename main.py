@@ -460,35 +460,46 @@ async def get_token_price(token: str) -> float:
         return 0.0
 
 
-async def get_dexscreener_new_pairs(limit: int = 50):
-    """Better new pairs fetcher"""
+async def get_dexscreener_new_pairs(limit: int = 80):
+    """Improved fetcher - focuses on newer Solana tokens"""
     try:
-        # Try multiple approaches
-        urls = [
-            "https://api.dexscreener.com/latest/dex/search?q=SOL",  # Broad search
-            "https://api.dexscreener.com/latest/dex/pairs/solana",   # Try direct
-        ]
-        
-        for url in urls:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=12) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        pairs = data.get("pairs", [])[:limit]
-                        # Filter only Solana + recent-ish
-                        sol_pairs = [
-                            p for p in pairs 
-                            if p.get("chainId") == "solana" 
-                            and p.get("baseToken", {}).get("address") != WSOL
-                        ]
-                        logger.info(f"✅ Fetched {len(sol_pairs)} Solana pairs")
-                        return sol_pairs
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                "https://api.dexscreener.com/latest/dex/search?q=SOL",
+                timeout=15
+            ) as resp:
+                
+                if resp.status != 200:
+                    logger.warning(f"DexScreener status: {resp.status}")
+                    return []
+                
+                data = await resp.json()
+                all_pairs = data.get("pairs", [])[:limit]
+                
+                fresh_pairs = []
+                for p in all_pairs:
+                    if p.get("chainId") != "solana":
+                        continue
                         
-        logger.warning("All API attempts failed")
-        return []
-        
+                    base = p.get("baseToken", {})
+                    addr = base.get("address", "")
+                    if not addr or addr == WSOL:
+                        continue
+                    
+                    # Age filter at source level
+                    created = p.get("pairCreatedAt", 0)
+                    age_min = (time.time() * 1000 - created) / 60000 if created else 9999
+                    
+                    if age_min > 90:        # Ignore very old tokens here
+                        continue
+                        
+                    fresh_pairs.append(p)
+                
+                logger.info(f"✅ Fetched {len(fresh_pairs)} fresh Solana pairs (age < 90min)")
+                return fresh_pairs
+                
     except Exception as e:
-        logger.error(f"New pairs fetch failed: {e}")
+        logger.error(f"get_dexscreener_new_pairs error: {e}", exc_info=True)
         return []
 
 
