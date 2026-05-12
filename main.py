@@ -874,6 +874,27 @@ async def scanner_job(context: ContextTypes.DEFAULT_TYPE):
                 if not addr or addr == WSOL:
                     continue
                 if addr in blacklist:
+async def scanner_job(context: ContextTypes.DEFAULT_TYPE):
+    if not cfg.get("auto_scan", False):
+        return
+
+    logger.info("🔍 Auto-scanner running...")
+
+    try:
+        pairs = await get_dexscreener_new_pairs(limit=80)
+        logger.info(f"Received {len(pairs)} pairs from DexScreener")
+
+        found: List[TokenScore] = []
+
+        for pair in pairs:
+            try:
+                base = pair.get("baseToken", {})
+                addr = base.get("address", "").strip()
+                symbol = base.get("symbol", "UNKNOWN")
+
+                if not addr or addr == WSOL:
+                    continue
+                if addr in blacklist:
                     continue
                 if addr in positions:
                     continue
@@ -883,10 +904,10 @@ async def scanner_job(context: ContextTypes.DEFAULT_TYPE):
 
                 logger.info(f"Candidate → {symbol} | Liq: ${liq:,.0f} | Vol: ${vol1h:,.0f}")
 
-                # Age check
+                # Age filter
                 created = pair.get("pairCreatedAt", 0)
                 age_min = (time.time() * 1000 - created) / 60000 if created else 9999
-                if age_min > cfg.get("max_age_minutes", 60):
+                if not (cfg.get("min_age_minutes", 0) <= age_min <= cfg.get("max_age_minutes", 60)):
                     continue
 
                 holders, top10 = await get_token_holders(addr)
@@ -903,10 +924,10 @@ async def scanner_job(context: ContextTypes.DEFAULT_TYPE):
                     logger.info(f"✅ PASSED: {symbol} (Score: {ts.score})")
 
             except Exception as inner_e:
-                logger.warning(f"Error processing token {symbol}: {inner_e}")
+                logger.warning(f"Error processing {symbol}: {inner_e}")
                 continue
 
-        # After loop
+        # Final processing
         found.sort(key=lambda x: x.score, reverse=True)
         scan_alerts.clear()
         scan_alerts.extend(found[:8])
@@ -918,17 +939,17 @@ async def scanner_job(context: ContextTypes.DEFAULT_TYPE):
             msg = _format_scan_alert(best)
             kb = _scan_alert_keyboard(best.address)
 
-            # Send alerts to users
             for uid in ALLOWED_USER_IDS:
                 try:
-                    await context.bot.send_message(uid, msg, parse_mode=ParseMode.MARKDOWN, 
-                                                 reply_markup=kb, disable_web_page_preview=True)
+                    await context.bot.send_message(
+                        uid, msg, parse_mode=ParseMode.MARKDOWN,
+                        reply_markup=kb, disable_web_page_preview=True
+                    )
                 except Exception as e:
-                    logger.warning(f"Failed to notify {uid}: {e}")
+                    logger.warning(f"Notify failed for {uid}: {e}")
 
-    except Exception as e:                                      # ← This was probably missing
+    except Exception as e:   # ← This except was missing
         logger.error(f"Scanner job crashed: {e}", exc_info=True)
-
 
 # ════════════════════════════════════════════════════
 #  POSITION MONITOR (background job)
