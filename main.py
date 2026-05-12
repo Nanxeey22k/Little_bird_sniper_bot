@@ -91,9 +91,8 @@ WEBHOOK_URL          = os.getenv("WEBHOOK_URL", "")               # e.g. https:/
 WEBHOOK_PORT         = int(os.getenv("PORT", 8080))               # Railway sets $PORT
 DB_PATH              = os.getenv("DB_PATH", "sniper_bot.db")
 
-# Default config — overridden by DB on startup
+# Default config – overridden by DB on startup
 DEFAULT_CFG: Dict = {
-DEFAULT_CFG = {
     "buy_amount_sol": float(os.getenv("BUY_AMOUNT_SOL", 0.05)),
     "slippage_bps": int(os.getenv("SLIPPAGE_BPS", 800)),
     "max_position_sol": float(os.getenv("MAX_POSITION_SOL", 0.5)),
@@ -105,14 +104,16 @@ DEFAULT_CFG = {
     "max_trades_day": int(os.getenv("MAX_TRADES_DAY", 8)),
     "risk_per_trade_pct": float(os.getenv("RISK_PER_TRADE_PCT", 2.0)),
     "min_score": float(os.getenv("MIN_SCORE", 62)),
-    "auto_scan": True,                    # ← MUST BE True
-    "auto_buy": False,                    # ← Keep False for now
+    
+    # Scanner settings
+    "auto_scan": True,
+    "auto_buy": False,
     "scan_interval_sec": 60,
     "min_age_minutes": 0,
-    "max_age_minutes": 45,                # Focus on fresh tokens
+    "max_age_minutes": 45,
     "min_volume_1h_usd": 4000,
     "min_holders": 25,
-    "max_top10_pct": 25,                  # Very important
+    "max_top10_pct": 25,
 }
 
 cfg: Dict = dict(DEFAULT_CFG)
